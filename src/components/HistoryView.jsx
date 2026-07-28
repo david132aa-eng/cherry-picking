@@ -1,27 +1,19 @@
 import { useState, useRef } from 'react'
-import { getAllDates, getRecords, downloadCsv } from '../services/storageService'
-
-function formatDate(dateStr) {
-  const [y, m, d] = dateStr.split('-')
-  const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
-  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`
-}
+import { getRecords, downloadCsv, todayDateStr } from '../services/storageService'
 
 export default function HistoryView({ onBack }) {
   const [query, setQuery] = useState('')
   const searchRef = useRef()
-  const dates = getAllDates()
 
+  const today = todayDateStr()
+  const records = getRecords(today)
   const q = query.trim().toUpperCase()
+  const filtered = q.length >= 2
+    ? records.filter(r => r.id.includes(q))
+    : records
 
-  // Search mode: find all records matching the query across all dates
-  const searchResults = q.length >= 2
-    ? dates.flatMap(date =>
-        getRecords(date)
-          .filter(r => r.id.includes(q))
-          .map(r => ({ ...r, date }))
-      ).sort((a, b) => b.ts.localeCompare(a.ts))
-    : null
+  const buffered = records.filter(r => r.status === 'BUFFERED').length
+  const alerts = records.filter(r => r.status === 'RUTEADO-ALERTA').length
 
   return (
     <div className="scanner-wrap">
@@ -33,20 +25,28 @@ export default function HistoryView({ onBack }) {
             </svg>
           </button>
           <div>
-            <div className="app-title">Historial</div>
+            <div className="app-title">Historial de hoy</div>
             <div className="app-sub">
-              {dates.length === 0 ? 'Sin registros' : `${dates.length} fecha${dates.length !== 1 ? 's' : ''} con registros`}
+              {records.length === 0
+                ? 'Sin registros hoy'
+                : <><span style={{color:'var(--green)'}}>{buffered} buffered</span>{alerts > 0 && <> · <span style={{color:'var(--red-vivid)'}}>{alerts} alerta{alerts !== 1 ? 's' : ''}</span></>} · {records.length} total</>
+              }
             </div>
           </div>
         </div>
+        {records.length > 0 && (
+          <div className="header-right">
+            <button className="btn-link" onClick={() => downloadCsv(records, `cherry-picking-${today}.csv`)}>
+              Descargar CSV
+            </button>
+          </div>
+        )}
       </div>
 
-      {dates.length === 0 ? (
-        <div className="empty-state">No hay registros guardados todavía.</div>
+      {records.length === 0 ? (
+        <div className="empty-state">No hay registros para hoy todavía.</div>
       ) : (
         <div className="scanner-main">
-
-          {/* Search bar */}
           <div className="search-bar">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="search-icon">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -70,71 +70,28 @@ export default function HistoryView({ onBack }) {
             )}
           </div>
 
-          {/* Search results */}
-          {searchResults !== null ? (
-            <div className="history-date-card">
-              <div className="history-date-header">
-                <div>
-                  <div className="history-date-label">
-                    {searchResults.length === 0
-                      ? `Sin resultados para "${q}"`
-                      : `${searchResults.length} resultado${searchResults.length !== 1 ? 's' : ''} para "${q}"`}
-                  </div>
-                </div>
+          <div className="history">
+            {q.length >= 2 && (
+              <div className="history-header">
+                {filtered.length === 0
+                  ? `Sin resultados para "${q}"`
+                  : `${filtered.length} resultado${filtered.length !== 1 ? 's' : ''} para "${q}"`}
               </div>
-              {searchResults.length > 0 && (
-                <div className="history-records">
-                  {searchResults.map((r, i) => (
-                    <div key={i} className={`history-row${r.status === 'RUTEADO-ALERTA' ? ' history-row--ruteado' : ''}`}>
-                      <span className="history-id">{r.id}</span>
-                      <span className="history-meta">
-                        {formatDate(r.date)} {new Date(r.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })} · {r.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Date list */
-            dates.map(date => {
-              const records = getRecords(date)
-              const buffered = records.filter(r => r.status === 'BUFFERED').length
-              const alerts = records.filter(r => r.status === 'RUTEADO-ALERTA').length
-              return (
-                <div key={date} className="history-date-card">
-                  <div className="history-date-header">
-                    <div>
-                      <div className="history-date-label">{formatDate(date)}</div>
-                      <div className="history-date-stats">
-                        <span className="stat-chip stat-chip--green">{buffered} buffered</span>
-                        {alerts > 0 && <span className="stat-chip stat-chip--red">{alerts} alerta{alerts !== 1 ? 's' : ''}</span>}
-                      </div>
-                    </div>
-                    <button
-                      className="btn-link"
-                      onClick={() => downloadCsv(records, `cherry-picking-${date}.csv`)}
-                    >
-                      Descargar CSV
-                    </button>
+            )}
+            {filtered.length === 0 && q.length >= 2 ? null : (
+              <>
+                {q.length < 2 && <div className="history-header">Todos los registros de hoy — {records.length} bipes</div>}
+                {filtered.map((r, i) => (
+                  <div key={i} className={`history-row${r.status === 'RUTEADO-ALERTA' ? ' history-row--ruteado' : ''}`}>
+                    <span className="history-id">{r.id}</span>
+                    <span className="history-meta">
+                      {new Date(r.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · {r.status}
+                    </span>
                   </div>
-                  <div className="history-records">
-                    {records.slice(0, 6).map((r, i) => (
-                      <div key={i} className={`history-row${r.status === 'RUTEADO-ALERTA' ? ' history-row--ruteado' : ''}`}>
-                        <span className="history-id">{r.id}</span>
-                        <span className="history-meta">
-                          {new Date(r.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })} · {r.status}
-                        </span>
-                      </div>
-                    ))}
-                    {records.length > 6 && (
-                      <div className="history-more">+{records.length - 6} registros más — descarga el CSV para ver todos</div>
-                    )}
-                  </div>
-                </div>
-              )
-            })
-          )}
+                ))}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

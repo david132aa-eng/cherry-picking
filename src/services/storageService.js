@@ -28,11 +28,19 @@ export function todayDateStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function formatTs(iso) {
+  const d = new Date(iso)
+  const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const time = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`
+  return `${date} ${time}`
+}
+
 export function downloadCsv(records, filename) {
-  const header = 'Timestamp,Shipment ID,Estado,Sesión'
-  const rows = records.map(r =>
-    [r.ts, r.id, r.status, r.session].map(v => `"${v}"`).join(',')
-  )
+  const header = 'Fecha,Hora,Shipment ID,Estado,Sesión'
+  const rows = records.map(r => {
+    const [date, time] = formatTs(r.ts).split(' ')
+    return [date, time, r.id, r.status, r.session].map(v => `"${v}"`).join(',')
+  })
   const csv = [header, ...rows].join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
