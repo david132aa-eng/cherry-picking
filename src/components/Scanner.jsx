@@ -25,12 +25,8 @@ export default function Scanner({ onShowHistory }) {
     setScans([])
   }
 
-  const handleScan = (e) => {
-    e.preventDefault()
-    const id = inputVal.trim().toUpperCase()
+  const processScan = (id) => {
     if (!id) return
-    setInputVal('')
-
     const isRouted = routedPackages.has(id)
     const record = {
       ts: new Date().toISOString(),
@@ -40,13 +36,32 @@ export default function Scanner({ onShowHistory }) {
     }
     saveRecord(record)
     setScans(prev => [record, ...prev].slice(0, 100))
-
     if (isRouted) {
       playAlarm()
       setAlertPackage(id)
     } else {
       playSuccess()
     }
+  }
+
+  const handleChange = (e) => {
+    const val = e.target.value
+    // biper sends ID + space as terminator
+    if (val.endsWith(' ')) {
+      const id = val.trim().toUpperCase()
+      setInputVal('')
+      processScan(id)
+    } else {
+      setInputVal(val)
+    }
+  }
+
+  const handleScan = (e) => {
+    e.preventDefault()
+    const id = inputVal.trim().toUpperCase()
+    if (!id) return
+    setInputVal('')
+    processScan(id)
   }
 
   const handleDismissAlert = () => {
@@ -124,7 +139,7 @@ export default function Scanner({ onShowHistory }) {
                 ref={inputRef}
                 className={`scan-input${alertPackage ? ' scan-input--blocked' : ''}`}
                 value={inputVal}
-                onChange={e => setInputVal(e.target.value)}
+                onChange={handleChange}
                 placeholder="ID del paquete..."
                 disabled={!!alertPackage}
                 autoComplete="off"
