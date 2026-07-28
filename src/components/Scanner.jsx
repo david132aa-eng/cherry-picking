@@ -2,10 +2,17 @@ import { useState, useEffect, useRef } from 'react'
 import FileLoader from './FileLoader'
 import AlertModal from './AlertModal'
 import { playSuccess, playAlarm } from '../services/audioService'
-import { saveRecord, getRecords, downloadCsv, todayDateStr } from '../services/storageService'
+import {
+  saveRecord, getRecords, downloadCsv, todayDateStr,
+  subscribeToTodayRoutes, syncRoutesToFirestore, saveScanToFirestore,
+} from '../services/storageService'
 import { parseIds } from './FileLoader'
 
 const ROUTES_KEY = () => 'cp_routes_' + todayDateStr()
+
+function saveTodayRoutes(ids, name) {
+  localStorage.setItem(ROUTES_KEY(), JSON.stringify({ ids: [...ids], name }))
+}
 
 function loadTodayRoutes() {
   try {
@@ -18,19 +25,11 @@ function loadTodayRoutes() {
   return null
 }
 
-function saveTodayRoutes(ids, name) {
-  localStorage.setItem(ROUTES_KEY(), JSON.stringify({ ids: [...ids], name }))
-}
-
-function getInitialRouteState() {
-  const saved = loadTodayRoutes()
-  return saved
-    ? { packages: saved.packages, fileName: saved.fileName }
-    : { packages: null, fileName: '' }
-}
-
 export default function Scanner({ onShowHistory }) {
-  const [{ packages: routedPackages, fileName: routedFileName }, setRouteState] = useState(getInitialRouteState)
+  const saved = loadTodayRoutes()
+  const [routedPackages, setRoutedPackages] = useState(saved?.packages ?? null)
+  const [routedFileName, setRoutedFileName] = useState(saved?.fileName ?? '')
+  const [syncLoading, setSyncLoading] = useState(!saved) // wait for Firestore only if no local cache
   const [inputVal, setInputVal] = useState('')
   const [alertPackage, setAlertPackage] = useState(null)
   const [scans, setScans] = useState([])
@@ -38,6 +37,26 @@ export default function Scanner({ onShowHistory }) {
   const [showAddMore, setShowAddMore] = useState(false)
   const [addMoreText, setAddMoreText] = useState('')
   const inputRef = useRef()
+
+  // Subscribe to today's routes in Firestore for cross-device sync
+  useEffect(() => {
+    const timeout = setTimeout(() => setSyncLoading(false), 5000)
+
+    const unsubscribe = subscribeToTodayRoutes((data) => {
+      clearTimeout(timeout)
+      setSyncLoading(false)
+      if (data) {
+        setRoutedPackages(data.ids)
+        setRoutedFileName(data.name)
+        saveTodayRoutes(data.ids, data.name)
+      }
+    })
+
+    return () => {
+      unsubscribe()
+      clearTimeout(timeout)
+    }
+  }, [])
 
   useEffect(() => {
     if (routedPackages && !alertPackage) {
@@ -47,13 +66,16 @@ export default function Scanner({ onShowHistory }) {
 
   const handleLoad = (ids, name) => {
     saveTodayRoutes(ids, name)
-    setRouteState({ packages: ids, fileName: name })
+    setRoutedPackages(ids)
+    setRoutedFileName(name)
     setScans([])
+    syncRoutesToFirestore(ids, name).catch(() => {})
   }
 
   const handleClearRoutes = () => {
     localStorage.removeItem(ROUTES_KEY())
-    setRouteState({ packages: null, fileName: '' })
+    setRoutedPackages(null)
+    setRoutedFileName('')
     setScans([])
     setShowAddMore(false)
   }
@@ -75,9 +97,11 @@ export default function Scanner({ onShowHistory }) {
     const merged = new Set([...routedPackages, ...newIds])
     const newName = `${routedFileName} +${newIds.size}`
     saveTodayRoutes(merged, newName)
-    setRouteState({ packages: merged, fileName: newName })
+    setRoutedPackages(merged)
+    setRoutedFileName(newName)
     setAddMoreText('')
     setShowAddMore(false)
+    syncRoutesToFirestore(merged, newName).catch(() => {})
     setTimeout(() => inputRef.current?.focus(), 50)
   }
 
@@ -91,6 +115,7 @@ export default function Scanner({ onShowHistory }) {
       session: sessionId,
     }
     saveRecord(record)
+    saveScanToFirestore(record).catch(() => {})
     setScans(prev => [record, ...prev].slice(0, 100))
     if (isRouted) {
       playAlarm()
@@ -102,7 +127,6 @@ export default function Scanner({ onShowHistory }) {
 
   const handleChange = (e) => {
     const val = e.target.value
-    // biper sends ID + whitespace (space, tab, newline) as terminator
     if (/\s$/.test(val)) {
       const id = val.trim().toUpperCase()
       setInputVal('')
@@ -193,7 +217,14 @@ export default function Scanner({ onShowHistory }) {
         </div>
       </div>
 
-      {!routedPackages ? (
+      {syncLoading ? (
+        <div className="scanner-main">
+          <div className="scan-card" style={{ textAlign: 'center', padding: '2rem' }}>
+            <div className="sync-spinner" />
+            <p className="scan-hint" style={{ marginTop: '1rem' }}>Sincronizando con la nube…</p>
+          </div>
+        </div>
+      ) : !routedPackages ? (
         <div className="scanner-main">
           <div className="scan-card">
             <p className="scan-label" style={{ marginBottom: '1rem', fontSize: '14px' }}>

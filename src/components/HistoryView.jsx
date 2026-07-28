@@ -1,12 +1,28 @@
-import { useState, useRef } from 'react'
-import { getRecords, downloadCsv, todayDateStr } from '../services/storageService'
+import { useState, useRef, useEffect } from 'react'
+import { getRecords, downloadCsv, todayDateStr, getTodayScansFromFirestore } from '../services/storageService'
 
 export default function HistoryView({ onBack }) {
   const [query, setQuery] = useState('')
+  const [records, setRecords] = useState(() => getRecords(todayDateStr()))
   const searchRef = useRef()
 
+  // Merge Firestore records (all devices) with localStorage records (this device)
+  useEffect(() => {
+    getTodayScansFromFirestore().then(remote => {
+      const local = getRecords(todayDateStr())
+      const seen = new Set()
+      const merged = [...remote, ...local].filter(r => {
+        const key = r.ts + r.id
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      merged.sort((a, b) => b.ts.localeCompare(a.ts))
+      setRecords(merged)
+    }).catch(() => {})
+  }, [])
+
   const today = todayDateStr()
-  const records = getRecords(today)
   const q = query.trim().toUpperCase()
   const filtered = q.length >= 2
     ? records.filter(r => r.id.includes(q))

@@ -330,6 +330,18 @@ body {
   white-space: nowrap;
 }
 
+/* Sync spinner */
+.sync-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--red-vivid);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* Session ID */
 .session-id {
   font-size: 11px;

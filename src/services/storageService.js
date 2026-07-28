@@ -1,9 +1,19 @@
+import { db } from '../firebase'
+import { doc, setDoc, updateDoc, getDoc, onSnapshot, arrayUnion } from 'firebase/firestore'
+
 const PREFIX = 'cp_records_'
 
 function localDateKey() {
   const d = new Date()
   return PREFIX + `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+
+export function todayDateStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// ── localStorage (local cache / offline) ──────────────────────────────────────
 
 export function saveRecord(record) {
   const key = localDateKey()
@@ -23,10 +33,37 @@ export function getAllDates() {
     .sort((a, b) => b.localeCompare(a))
 }
 
-export function todayDateStr() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+// ── Firestore sync ─────────────────────────────────────────────────────────────
+
+export function subscribeToTodayRoutes(callback) {
+  const ref = doc(db, 'daily', `routes-${todayDateStr()}`)
+  return onSnapshot(ref, (snap) => {
+    callback(snap.exists() ? { ids: new Set(snap.data().ids), name: snap.data().name } : null)
+  })
 }
+
+export async function syncRoutesToFirestore(ids, name) {
+  await setDoc(doc(db, 'daily', `routes-${todayDateStr()}`), {
+    ids: [...ids],
+    name,
+  })
+}
+
+export async function saveScanToFirestore(record) {
+  const ref = doc(db, 'daily', `scans-${todayDateStr()}`)
+  try {
+    await updateDoc(ref, { records: arrayUnion(record) })
+  } catch {
+    await setDoc(ref, { records: [record] })
+  }
+}
+
+export async function getTodayScansFromFirestore() {
+  const snap = await getDoc(doc(db, 'daily', `scans-${todayDateStr()}`))
+  return snap.exists() ? (snap.data().records || []) : []
+}
+
+// ── CSV export ────────────────────────────────────────────────────────────────
 
 function formatTs(iso) {
   const d = new Date(iso)

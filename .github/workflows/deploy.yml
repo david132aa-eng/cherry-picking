@@ -24,6 +24,9 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: /cherry-picking/
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
