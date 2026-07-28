@@ -4,9 +4,32 @@ import AlertModal from './AlertModal'
 import { playSuccess, playAlarm } from '../services/audioService'
 import { saveRecord, getRecords, downloadCsv, todayDateStr } from '../services/storageService'
 
+const ROUTES_KEY = () => 'cp_routes_' + todayDateStr()
+
+function loadTodayRoutes() {
+  try {
+    const raw = localStorage.getItem(ROUTES_KEY())
+    if (raw) {
+      const { ids, name } = JSON.parse(raw)
+      return { packages: new Set(ids), fileName: name }
+    }
+  } catch {}
+  return null
+}
+
+function saveTodayRoutes(ids, name) {
+  localStorage.setItem(ROUTES_KEY(), JSON.stringify({ ids: [...ids], name }))
+}
+
+function getInitialRouteState() {
+  const saved = loadTodayRoutes()
+  return saved
+    ? { packages: saved.packages, fileName: saved.fileName }
+    : { packages: null, fileName: '' }
+}
+
 export default function Scanner({ onShowHistory }) {
-  const [routedPackages, setRoutedPackages] = useState(null)
-  const [routedFileName, setRoutedFileName] = useState('')
+  const [{ packages: routedPackages, fileName: routedFileName }, setRouteState] = useState(getInitialRouteState)
   const [inputVal, setInputVal] = useState('')
   const [alertPackage, setAlertPackage] = useState(null)
   const [scans, setScans] = useState([])
@@ -20,8 +43,14 @@ export default function Scanner({ onShowHistory }) {
   }, [routedPackages, alertPackage])
 
   const handleLoad = (ids, name) => {
-    setRoutedPackages(ids)
-    setRoutedFileName(name)
+    saveTodayRoutes(ids, name)
+    setRouteState({ packages: ids, fileName: name })
+    setScans([])
+  }
+
+  const handleClearRoutes = () => {
+    localStorage.removeItem(ROUTES_KEY())
+    setRouteState({ packages: null, fileName: '' })
     setScans([])
   }
 
@@ -46,11 +75,11 @@ export default function Scanner({ onShowHistory }) {
 
   const handleChange = (e) => {
     const val = e.target.value
-    // biper sends ID + space as terminator
-    if (val.endsWith(' ')) {
+    // biper sends ID + whitespace (space, tab, newline) as terminator
+    if (/\s$/.test(val)) {
       const id = val.trim().toUpperCase()
       setInputVal('')
-      processScan(id)
+      if (id) processScan(id)
     } else {
       setInputVal(val)
     }
@@ -71,8 +100,7 @@ export default function Scanner({ onShowHistory }) {
 
   const handleDownload = () => {
     const today = todayDateStr()
-    const allToday = getRecords(today)
-    downloadCsv(allToday, `cherry-picking-${today}.csv`)
+    downloadCsv(getRecords(today), `cherry-picking-${today}.csv`)
   }
 
   const buffered = scans.filter(s => s.status === 'BUFFERED').length
@@ -88,9 +116,10 @@ export default function Scanner({ onShowHistory }) {
           </svg>
           <div>
             <div className="app-title">Cherry Picking</div>
-            {routedPackages && (
-              <div className="app-sub">{routedFileName} · {routedPackages.size} ruteados</div>
-            )}
+            {routedPackages
+              ? <div className="app-sub">{routedFileName} · {routedPackages.size} ruteados</div>
+              : <div className="app-sub">Carga la base de ruteados para comenzar</div>
+            }
           </div>
         </div>
         <div className="header-right">
@@ -106,11 +135,7 @@ export default function Scanner({ onShowHistory }) {
             </svg>
           </button>
           {routedPackages && (
-            <button
-              className="btn-icon"
-              title="Cambiar base de ruteados"
-              onClick={() => { setRoutedPackages(null); setRoutedFileName(''); setScans([]) }}
-            >
+            <button className="btn-icon" title="Cambiar base de ruteados" onClick={handleClearRoutes}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="17 8 12 3 7 8"/>
@@ -148,7 +173,7 @@ export default function Scanner({ onShowHistory }) {
               />
             </form>
             <p className="scan-hint">
-              Presiona Enter para confirmar · {routedPackages.size} paquetes ruteados cargados
+              Bipa el paquete · el biper registra automáticamente · {routedPackages.size} ruteados cargados
             </p>
           </div>
 
