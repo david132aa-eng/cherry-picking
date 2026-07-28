@@ -195,6 +195,7 @@ body {
   cursor: pointer;
 }
 .btn-icon:hover { background: var(--bg); }
+.btn-icon--active { background: var(--blue-bg); color: var(--blue); border-color: var(--blue); }
 .btn-signout {
   font-size: 12px;
   padding: 5px 10px;

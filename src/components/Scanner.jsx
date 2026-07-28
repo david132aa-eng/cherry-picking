@@ -3,6 +3,7 @@ import FileLoader from './FileLoader'
 import AlertModal from './AlertModal'
 import { playSuccess, playAlarm } from '../services/audioService'
 import { saveRecord, getRecords, downloadCsv, todayDateStr } from '../services/storageService'
+import { parseIds } from './FileLoader'
 
 const ROUTES_KEY = () => 'cp_routes_' + todayDateStr()
 
@@ -34,6 +35,8 @@ export default function Scanner({ onShowHistory }) {
   const [alertPackage, setAlertPackage] = useState(null)
   const [scans, setScans] = useState([])
   const [sessionId] = useState('S-' + Date.now().toString(36).toUpperCase())
+  const [showAddMore, setShowAddMore] = useState(false)
+  const [addMoreText, setAddMoreText] = useState('')
   const inputRef = useRef()
 
   useEffect(() => {
@@ -52,6 +55,19 @@ export default function Scanner({ onShowHistory }) {
     localStorage.removeItem(ROUTES_KEY())
     setRouteState({ packages: null, fileName: '' })
     setScans([])
+    setShowAddMore(false)
+  }
+
+  const handleAddMore = () => {
+    const newIds = parseIds(addMoreText)
+    if (!newIds.size) return
+    const merged = new Set([...routedPackages, ...newIds])
+    const newName = `${routedFileName} +${newIds.size}`
+    saveTodayRoutes(merged, newName)
+    setRouteState({ packages: merged, fileName: newName })
+    setAddMoreText('')
+    setShowAddMore(false)
+    setTimeout(() => inputRef.current?.focus(), 50)
   }
 
   const processScan = (id) => {
@@ -135,13 +151,26 @@ export default function Scanner({ onShowHistory }) {
             </svg>
           </button>
           {routedPackages && (
-            <button className="btn-icon" title="Cambiar base de ruteados" onClick={handleClearRoutes}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/>
-                <line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-            </button>
+            <>
+              <button
+                className={`btn-icon${showAddMore ? ' btn-icon--active' : ''}`}
+                title="Agregar más IDs a la base"
+                onClick={() => { setShowAddMore(v => !v); setAddMoreText('') }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="16"/>
+                  <line x1="8" y1="12" x2="16" y2="12"/>
+                </svg>
+              </button>
+              <button className="btn-icon" title="Cambiar base de ruteados" onClick={handleClearRoutes}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -157,6 +186,38 @@ export default function Scanner({ onShowHistory }) {
         </div>
       ) : (
         <div className="scanner-main">
+          {showAddMore && (
+            <div className="scan-card">
+              <label className="scan-label">Agregar IDs a la base actual</label>
+              <textarea
+                className="paste-textarea"
+                placeholder={'Pega los IDs que faltaron, uno por línea:\nABC123\nDEF456\n...'}
+                value={addMoreText}
+                onChange={e => setAddMoreText(e.target.value)}
+                rows={5}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button
+                  className="btn-primary"
+                  disabled={parseIds(addMoreText).size === 0}
+                  onClick={handleAddMore}
+                  style={{ flex: 1 }}
+                >
+                  {parseIds(addMoreText).size > 0
+                    ? `Agregar ${parseIds(addMoreText).size} IDs`
+                    : 'Pega IDs arriba'}
+                </button>
+                <button
+                  className="btn-signout"
+                  onClick={() => { setShowAddMore(false); setAddMoreText('') }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="scan-card">
             <label className="scan-label">Escanea o escribe el ID del paquete</label>
             <form onSubmit={handleScan}>
