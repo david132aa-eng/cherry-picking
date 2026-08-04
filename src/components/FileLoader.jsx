@@ -5,7 +5,7 @@ const HEADER_RE = /^(shipment|envio|envío|id|paquete|package|columna|column|det
 export function parseIdsWithRoutes(text) {
   const routeMap = new Map()
   for (const line of text.split(/\r?\n/)) {
-    const parts = line.split(/[,;\t]/)
+    const parts = line.trim().split(/[\s,;]+/)
     const id = parts[0]?.trim().toUpperCase()
     if (!id || id.length < 3 || HEADER_RE.test(id)) continue
     routeMap.set(id, parts[1]?.trim().toUpperCase() || '')

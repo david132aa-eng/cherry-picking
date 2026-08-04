@@ -40,14 +40,21 @@ export default function ReinjectView({ onBack }) {
   const [reinjections, setReinjections] = useState([])
   const [sessionId] = useState('R-' + Date.now().toString(36).toUpperCase())
   const inputRef = useRef()
+  // Tracks whether the user loaded a base locally in this session
+  const locallyLoadedRef = useRef(false)
 
-  // Shared routing base from Firestore
+  // Shared routing base from Firestore — same doc that Cherry Picking writes
   useEffect(() => {
     const timeout = setTimeout(() => setSyncLoading(false), 5000)
     const unsub = subscribeToTodayRoutes((data) => {
       clearTimeout(timeout)
       setSyncLoading(false)
-      if (data) setRouteMap(data.routeMap)
+      if (data) {
+        const incomingHasRoutes = [...data.routeMap.values()].some(v => v.length > 0)
+        // Don't overwrite a locally-loaded base with an empty Firestore doc
+        if (locallyLoadedRef.current && !incomingHasRoutes) return
+        setRouteMap(data.routeMap)
+      }
     })
     return () => { unsub(); clearTimeout(timeout) }
   }, [])
@@ -62,6 +69,7 @@ export default function ReinjectView({ onBack }) {
   }, [syncLoading])
 
   const handleLoad = (newRouteMap, name) => {
+    locallyLoadedRef.current = true
     setRouteMap(newRouteMap)
     syncRoutesToFirestore(newRouteMap, name).catch(() => {})
   }
