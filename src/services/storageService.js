@@ -49,13 +49,18 @@ export async function syncRoutesToFirestore(ids, name) {
   })
 }
 
+// merge:true creates the doc if absent, or appends without overwriting
 export async function saveScanToFirestore(record) {
   const ref = doc(db, 'daily', `scans-${todayDateStr()}`)
-  try {
-    await updateDoc(ref, { records: arrayUnion(record) })
-  } catch {
-    await setDoc(ref, { records: [record] })
-  }
+  await setDoc(ref, { records: arrayUnion(record) }, { merge: true })
+}
+
+export function subscribeToTodayScans(callback) {
+  const ref = doc(db, 'daily', `scans-${todayDateStr()}`)
+  return onSnapshot(ref, (snap) => {
+    const records = snap.exists() ? (snap.data().records || []) : []
+    callback([...records].sort((a, b) => b.ts.localeCompare(a.ts)))
+  })
 }
 
 export async function getTodayScansFromFirestore() {

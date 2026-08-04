@@ -3,8 +3,9 @@ import FileLoader from './FileLoader'
 import AlertModal from './AlertModal'
 import { playSuccess, playAlarm } from '../services/audioService'
 import {
-  saveRecord, getRecords, downloadCsv, todayDateStr,
-  subscribeToTodayRoutes, syncRoutesToFirestore, saveScanToFirestore,
+  saveRecord, downloadCsv, todayDateStr,
+  subscribeToTodayRoutes, syncRoutesToFirestore,
+  saveScanToFirestore, subscribeToTodayScans,
 } from '../services/storageService'
 import { parseIds } from './FileLoader'
 
@@ -37,6 +38,11 @@ export default function Scanner({ onShowHistory }) {
   const [showAddMore, setShowAddMore] = useState(false)
   const [addMoreText, setAddMoreText] = useState('')
   const inputRef = useRef()
+
+  // Subscribe to today's scans — real-time across all devices, no cap
+  useEffect(() => {
+    return subscribeToTodayScans(records => setScans(records))
+  }, [])
 
   // Subscribe to today's routes in Firestore for cross-device sync
   useEffect(() => {
@@ -116,7 +122,7 @@ export default function Scanner({ onShowHistory }) {
     }
     saveRecord(record)
     saveScanToFirestore(record).catch(() => {})
-    setScans(prev => [record, ...prev].slice(0, 100))
+    setScans(prev => [record, ...prev]) // optimistic; onSnapshot replaces with Firestore data
     if (isRouted) {
       playAlarm()
       setAlertPackage(id)
@@ -150,8 +156,7 @@ export default function Scanner({ onShowHistory }) {
   }
 
   const handleDownload = () => {
-    const today = todayDateStr()
-    downloadCsv(getRecords(today), `cherry-picking-${today}.csv`)
+    downloadCsv(scans, `cherry-picking-${todayDateStr()}.csv`)
   }
 
   const buffered = scans.filter(s => s.status === 'BUFFERED').length
@@ -304,7 +309,7 @@ export default function Scanner({ onShowHistory }) {
 
           {scans.length > 0 && (
             <div className="history">
-              <div className="history-header">Últimos bipes — sesión actual</div>
+              <div className="history-header">Bipes de hoy — todos los dispositivos ({scans.length})</div>
               {scans.map((s, i) => (
                 <div key={i} className={`history-row${s.status === 'RUTEADO-ALERTA' ? ' history-row--ruteado' : ''}`}>
                   <span className="history-id">{s.id}</span>
