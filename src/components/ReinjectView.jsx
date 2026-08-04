@@ -142,6 +142,20 @@ export default function ReinjectView({ onBack }) {
     downloadCsv(rows, `reinyeccion-${todayDateStr()}.csv`)
   }
 
+  const handleExportBase = () => {
+    if (!routeMap) return
+    const lines = ['Id_de_Unidad\tRuta\tGrupo', ...[...routeMap.entries()].map(([id, route]) =>
+      `${id}\t${route || ''}\t${getLetterGroup(route)}`
+    )]
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `base-reinyeccion-${todayDateStr()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ── Dashboard ────────────────────────────────────────────────────────────────
 
   const { groupCounts, allGroups, maxCount } = useMemo(() => {
@@ -189,7 +203,16 @@ export default function ReinjectView({ onBack }) {
         </div>
         <div className="header-right">
           {reinjections.length > 0 && (
-            <button className="btn-link" onClick={handleDownload}>CSV</button>
+            <button className="btn-link" onClick={handleDownload}>CSV bipes</button>
+          )}
+          {routeMap && (
+            <button className="btn-icon" title="Descargar base" onClick={handleExportBase}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </button>
           )}
         </div>
       </div>
