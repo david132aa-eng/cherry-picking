@@ -36,7 +36,9 @@ export default function FileLoader({ onLoad }) {
     reader.readAsText(file, 'UTF-8')
   }
 
-  const pasteCount = parseIdsWithRoutes(pasteText).size
+  const parsedMap = parseIdsWithRoutes(pasteText)
+  const pasteCount = parsedMap.size
+  const pasteRouteCount = [...parsedMap.values()].filter(v => v.length > 0).length
 
   return (
     <div className="file-loader">
@@ -80,6 +82,13 @@ export default function FileLoader({ onLoad }) {
             rows={7}
             autoFocus
           />
+          {pasteCount > 0 && (
+            <p className="scan-hint" style={{ margin: '4px 0' }}>
+              {pasteRouteCount > 0
+                ? `${pasteCount} IDs detectados · ${pasteRouteCount} con ruta`
+                : `${pasteCount} IDs detectados · ⚠️ sin rutas — verifica que las columnas estén separadas por tabulación o espacio`}
+            </p>
+          )}
           <button
             className="btn-primary"
             disabled={pasteCount === 0}
@@ -89,7 +98,11 @@ export default function FileLoader({ onLoad }) {
               setPasting(false)
             }}
           >
-            {pasteCount > 0 ? `Cargar ${pasteCount} IDs` : 'Pega IDs arriba'}
+            {pasteCount > 0
+              ? pasteRouteCount > 0
+                ? `Cargar ${pasteCount} IDs (${pasteRouteCount} con ruta)`
+                : `Cargar ${pasteCount} IDs (sin ruta)`
+              : 'Pega IDs arriba'}
           </button>
         </div>
       )}
