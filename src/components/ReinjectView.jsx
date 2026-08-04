@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { playSuccess } from '../services/audioService'
 import {
   todayDateStr, downloadCsv,
-  subscribeToTodayRoutes,
+  subscribeToTodayRoutes, syncRoutesToFirestore,
   saveReinjectToFirestore, subscribeToReinjections,
 } from '../services/storageService'
+import FileLoader from './FileLoader'
 
 const KNOWN_GROUPS = ['AB', 'CD', 'FG', 'HI', 'JK', 'LM', 'NP', 'QR', 'ST', 'UV', 'WX', 'YZ']
 
@@ -59,6 +60,11 @@ export default function ReinjectView({ onBack }) {
   useEffect(() => {
     if (!syncLoading) setTimeout(() => inputRef.current?.focus(), 100)
   }, [syncLoading])
+
+  const handleLoad = (newRouteMap, name) => {
+    setRouteMap(newRouteMap)
+    syncRoutesToFirestore(newRouteMap, name).catch(() => {})
+  }
 
   const processScan = (id) => {
     const rawRoute = routeMap?.get(id)          // undefined | '' | 'V2_AM2'
@@ -164,14 +170,14 @@ export default function ReinjectView({ onBack }) {
         </div>
       ) : (
         <div className="scanner-main">
-          {!routeMap && (
-            <div className="reinject-warning">
-              Sin base de ruteados hoy — carga la base en Cherry Picking primero.
-            </div>
-          )}
-          {routeMap && ![...routeMap.values()].some(v => v.length > 0) && (
-            <div className="reinject-warning reinject-warning--action">
-              ⚠️ La base no tiene datos de ruta. En Cherry Picking, haz clic en <strong>↑ (Cambiar base)</strong> y carga el archivo CSV nuevamente con el formato <strong>ID,Ruta</strong> (dos columnas).
+          {(!routeMap || ![...routeMap.values()].some(v => v.length > 0)) && (
+            <div className="scan-card">
+              <p className="scan-label" style={{ marginBottom: '0.75rem' }}>
+                {!routeMap
+                  ? 'Carga la base de paquetes (ID · Ruta) para registrar grupos de letras'
+                  : '⚠️ La base no tiene rutas. Carga el CSV con dos columnas: ID y Ruta'}
+              </p>
+              <FileLoader onLoad={handleLoad} />
             </div>
           )}
 
