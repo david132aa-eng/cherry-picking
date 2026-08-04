@@ -106,7 +106,8 @@ export default function ReinjectView({ onBack }) {
   const { groupCounts, allGroups, maxCount } = useMemo(() => {
     const counts = new Map()
     for (const r of reinjections) {
-      const g = r.route || 'ETIQUETA BLANCA'
+      // normalize legacy 'SIN RUTA' records to 'ETIQUETA BLANCA'
+      const g = (!r.route || r.route === 'SIN RUTA') ? 'ETIQUETA BLANCA' : r.route
       counts.set(g, (counts.get(g) || 0) + 1)
     }
     const knownWithData = KNOWN_GROUPS.filter(g => counts.has(g))
@@ -163,7 +164,12 @@ export default function ReinjectView({ onBack }) {
         <div className="scanner-main">
           {!routeMap && (
             <div className="reinject-warning">
-              Sin base de ruteados hoy — carga la base en Cherry Picking primero para ver los grupos de ruta.
+              Sin base de ruteados hoy — carga la base en Cherry Picking primero.
+            </div>
+          )}
+          {routeMap && ![...routeMap.values()].some(v => v.length > 0) && (
+            <div className="reinject-warning reinject-warning--action">
+              ⚠️ La base no tiene datos de ruta. En Cherry Picking, haz clic en <strong>↑ (Cambiar base)</strong> y carga el archivo CSV nuevamente con el formato <strong>ID,Ruta</strong> (dos columnas).
             </div>
           )}
 

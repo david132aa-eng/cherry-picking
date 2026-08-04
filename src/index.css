@@ -510,6 +510,11 @@ body {
   font-size: 13px;
   line-height: 1.4;
 }
+.reinject-warning--action {
+  background: #fff8e1;
+  color: #7a5800;
+  border-left: 3px solid #f0b429;
+}
 
 .dashboard-header {
   display: flex;
