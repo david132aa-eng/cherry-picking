@@ -1,21 +1,22 @@
 import { useRef, useState } from 'react'
 
-function parseIds(text) {
-  const ids = new Set()
-  const lines = text.split(/\r?\n/)
-  for (const line of lines) {
+const HEADER_RE = /^(shipment|envio|envío|id|paquete|package|columna|column|detalle|estado|fecha|date|ruta|route|grupo|group)$/i
+
+export function parseIdsWithRoutes(text) {
+  const routeMap = new Map()
+  for (const line of text.split(/\r?\n/)) {
     const parts = line.split(/[,;\t]/)
-    for (const part of parts) {
-      const id = part.trim().toUpperCase()
-      if (id.length >= 3 && !/^(shipment|envio|envío|id|paquete|package|columna|column|detalle|estado|fecha|date)$/i.test(id)) {
-        ids.add(id)
-      }
-    }
+    const id = parts[0]?.trim().toUpperCase()
+    if (!id || id.length < 3 || HEADER_RE.test(id)) continue
+    routeMap.set(id, parts[1]?.trim().toUpperCase() || '')
   }
-  return ids
+  return routeMap
 }
 
-export { parseIds }
+// Backward-compat export used in Scanner for count display
+export function parseIds(text) {
+  return new Set(parseIdsWithRoutes(text).keys())
+}
 
 export default function FileLoader({ onLoad }) {
   const [dragging, setDragging] = useState(false)
@@ -24,8 +25,8 @@ export default function FileLoader({ onLoad }) {
   const inputRef = useRef()
 
   const processText = (text, name) => {
-    const ids = parseIds(text)
-    if (ids.size > 0) onLoad(ids, name)
+    const routeMap = parseIdsWithRoutes(text)
+    if (routeMap.size > 0) onLoad(routeMap, name)
   }
 
   const handleFile = (file) => {
@@ -35,7 +36,7 @@ export default function FileLoader({ onLoad }) {
     reader.readAsText(file, 'UTF-8')
   }
 
-  const pasteIds = parseIds(pasteText)
+  const pasteCount = parseIdsWithRoutes(pasteText).size
 
   return (
     <div className="file-loader">
@@ -53,7 +54,7 @@ export default function FileLoader({ onLoad }) {
           <polyline points="9 15 12 12 15 15"/>
         </svg>
         <span className="drop-label">Arrastra un archivo CSV o haz clic para seleccionar</span>
-        <span className="drop-hint">Archivo con los Shipment IDs de paquetes ruteados</span>
+        <span className="drop-hint">Columna 1: Shipment ID · Columna 2: Grupo de ruta (AB, CD…)</span>
         <input
           ref={inputRef}
           type="file"
@@ -65,7 +66,7 @@ export default function FileLoader({ onLoad }) {
 
       <div className="paste-toggle">
         <button className="btn-text" onClick={() => setPasting(!pasting)}>
-          {pasting ? 'Cancelar' : 'O pega la lista de IDs directamente'}
+          {pasting ? 'Cancelar' : 'O pega la lista directamente'}
         </button>
       </div>
 
@@ -73,7 +74,7 @@ export default function FileLoader({ onLoad }) {
         <div className="paste-area">
           <textarea
             className="paste-textarea"
-            placeholder={'Pega aquí los IDs, uno por línea (o en CSV):\nABC123\nDEF456\n...'}
+            placeholder={'Formato: ID,Ruta (una por línea)\nCE47120890002,AB\nCE47120890003,CD\n...\nO solo IDs sin ruta'}
             value={pasteText}
             onChange={e => setPasteText(e.target.value)}
             rows={7}
@@ -81,14 +82,14 @@ export default function FileLoader({ onLoad }) {
           />
           <button
             className="btn-primary"
-            disabled={pasteIds.size === 0}
+            disabled={pasteCount === 0}
             onClick={() => {
-              processText(pasteText, `Lista pegada (${pasteIds.size} IDs)`)
+              processText(pasteText, `Lista pegada (${pasteCount} IDs)`)
               setPasteText('')
               setPasting(false)
             }}
           >
-            {pasteIds.size > 0 ? `Cargar ${pasteIds.size} IDs` : 'Pega IDs arriba'}
+            {pasteCount > 0 ? `Cargar ${pasteCount} IDs` : 'Pega IDs arriba'}
           </button>
         </div>
       )}

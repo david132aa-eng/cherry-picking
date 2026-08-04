@@ -7,30 +7,36 @@ import {
   subscribeToTodayRoutes, syncRoutesToFirestore,
   saveScanToFirestore, subscribeToTodayScans,
 } from '../services/storageService'
-import { parseIds } from './FileLoader'
+import { parseIds, parseIdsWithRoutes } from './FileLoader'
 
 const ROUTES_KEY = () => 'cp_routes_' + todayDateStr()
 
-function saveTodayRoutes(ids, name) {
-  localStorage.setItem(ROUTES_KEY(), JSON.stringify({ ids: [...ids], name }))
+function saveTodayRoutes(ids, name, routeMap) {
+  localStorage.setItem(ROUTES_KEY(), JSON.stringify({
+    ids: [...ids],
+    name,
+    routeMap: routeMap ? Object.fromEntries(routeMap) : {},
+  }))
 }
 
 function loadTodayRoutes() {
   try {
     const raw = localStorage.getItem(ROUTES_KEY())
     if (raw) {
-      const { ids, name } = JSON.parse(raw)
-      return { packages: new Set(ids), fileName: name }
+      const data = JSON.parse(raw)
+      const routeMap = new Map(Object.entries(data.routeMap || {}))
+      return { packages: new Set(data.ids), fileName: data.name, routeMap }
     }
   } catch {}
   return null
 }
 
-export default function Scanner({ onShowHistory }) {
+export default function Scanner({ onShowHistory, onShowReinject }) {
   const saved = loadTodayRoutes()
   const [routedPackages, setRoutedPackages] = useState(saved?.packages ?? null)
   const [routedFileName, setRoutedFileName] = useState(saved?.fileName ?? '')
-  const [syncLoading, setSyncLoading] = useState(!saved) // wait for Firestore only if no local cache
+  const [routeMap, setRouteMap] = useState(saved?.routeMap ?? null)
+  const [syncLoading, setSyncLoading] = useState(!saved)
   const [inputVal, setInputVal] = useState('')
   const [alertPackage, setAlertPackage] = useState(null)
   const [scans, setScans] = useState([])
@@ -39,7 +45,7 @@ export default function Scanner({ onShowHistory }) {
   const [addMoreText, setAddMoreText] = useState('')
   const inputRef = useRef()
 
-  // Subscribe to today's scans — real-time across all devices, no cap
+  // Subscribe to today's scans — real-time across all devices
   useEffect(() => {
     return subscribeToTodayScans(records => setScans(records))
   }, [])
@@ -47,47 +53,44 @@ export default function Scanner({ onShowHistory }) {
   // Subscribe to today's routes in Firestore for cross-device sync
   useEffect(() => {
     const timeout = setTimeout(() => setSyncLoading(false), 5000)
-
     const unsubscribe = subscribeToTodayRoutes((data) => {
       clearTimeout(timeout)
       setSyncLoading(false)
       if (data) {
         setRoutedPackages(data.ids)
+        setRouteMap(data.routeMap)
         setRoutedFileName(data.name)
-        saveTodayRoutes(data.ids, data.name)
+        saveTodayRoutes(data.ids, data.name, data.routeMap)
       }
     })
-
-    return () => {
-      unsubscribe()
-      clearTimeout(timeout)
-    }
+    return () => { unsubscribe(); clearTimeout(timeout) }
   }, [])
 
   useEffect(() => {
-    if (routedPackages && !alertPackage) {
-      inputRef.current?.focus()
-    }
+    if (routedPackages && !alertPackage) inputRef.current?.focus()
   }, [routedPackages, alertPackage])
 
-  const handleLoad = (ids, name) => {
-    saveTodayRoutes(ids, name)
+  const handleLoad = (newRouteMap, name) => {
+    const ids = new Set(newRouteMap.keys())
+    saveTodayRoutes(ids, name, newRouteMap)
     setRoutedPackages(ids)
+    setRouteMap(newRouteMap)
     setRoutedFileName(name)
     setScans([])
-    syncRoutesToFirestore(ids, name).catch(() => {})
+    syncRoutesToFirestore(newRouteMap, name).catch(() => {})
   }
 
   const handleClearRoutes = () => {
     localStorage.removeItem(ROUTES_KEY())
     setRoutedPackages(null)
+    setRouteMap(null)
     setRoutedFileName('')
     setScans([])
     setShowAddMore(false)
   }
 
   const handleExportRoutes = () => {
-    const content = [...routedPackages].join('\n')
+    const content = [...(routedPackages || [])].join('\n')
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -98,16 +101,19 @@ export default function Scanner({ onShowHistory }) {
   }
 
   const handleAddMore = () => {
-    const newIds = parseIds(addMoreText)
-    if (!newIds.size) return
-    const merged = new Set([...routedPackages, ...newIds])
-    const newName = `${routedFileName} +${newIds.size}`
-    saveTodayRoutes(merged, newName)
-    setRoutedPackages(merged)
+    const newRouteMap = parseIdsWithRoutes(addMoreText)
+    if (!newRouteMap.size) return
+    const currentMap = routeMap || new Map()
+    const mergedMap = new Map([...currentMap, ...newRouteMap])
+    const mergedIds = new Set(mergedMap.keys())
+    const newName = `${routedFileName} +${newRouteMap.size}`
+    saveTodayRoutes(mergedIds, newName, mergedMap)
+    setRoutedPackages(mergedIds)
+    setRouteMap(mergedMap)
     setRoutedFileName(newName)
     setAddMoreText('')
     setShowAddMore(false)
-    syncRoutesToFirestore(merged, newName).catch(() => {})
+    syncRoutesToFirestore(mergedMap, newName).catch(() => {})
     setTimeout(() => inputRef.current?.focus(), 50)
   }
 
@@ -122,7 +128,7 @@ export default function Scanner({ onShowHistory }) {
     }
     saveRecord(record)
     saveScanToFirestore(record).catch(() => {})
-    setScans(prev => [record, ...prev]) // optimistic; onSnapshot replaces with Firestore data
+    setScans(prev => [record, ...prev])
     if (isRouted) {
       playAlarm()
       setAlertPackage(id)
@@ -180,10 +186,11 @@ export default function Scanner({ onShowHistory }) {
         </div>
         <div className="header-right">
           {scans.length > 0 && (
-            <button className="btn-link" onClick={handleDownload}>
-              Descargar CSV
-            </button>
+            <button className="btn-link" onClick={handleDownload}>CSV</button>
           )}
+          <button className="btn-link" onClick={onShowReinject} title="Módulo Reinyección SAN1">
+            Reinyección
+          </button>
           <button className="btn-icon" onClick={onShowHistory} title="Ver historial">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/>
@@ -192,7 +199,7 @@ export default function Scanner({ onShowHistory }) {
           </button>
           {routedPackages && (
             <>
-              <button className="btn-icon" title="Descargar base de ruteados para compartir" onClick={handleExportRoutes}>
+              <button className="btn-icon" title="Descargar base" onClick={handleExportRoutes}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
@@ -201,7 +208,7 @@ export default function Scanner({ onShowHistory }) {
               </button>
               <button
                 className={`btn-icon${showAddMore ? ' btn-icon--active' : ''}`}
-                title="Agregar más IDs a la base"
+                title="Agregar más IDs"
                 onClick={() => { setShowAddMore(v => !v); setAddMoreText('') }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -210,7 +217,7 @@ export default function Scanner({ onShowHistory }) {
                   <line x1="8" y1="12" x2="16" y2="12"/>
                 </svg>
               </button>
-              <button className="btn-icon" title="Cambiar base de ruteados" onClick={handleClearRoutes}>
+              <button className="btn-icon" title="Cambiar base" onClick={handleClearRoutes}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="17 8 12 3 7 8"/>
@@ -233,7 +240,7 @@ export default function Scanner({ onShowHistory }) {
         <div className="scanner-main">
           <div className="scan-card">
             <p className="scan-label" style={{ marginBottom: '1rem', fontSize: '14px' }}>
-              Carga la base de paquetes ruteados para comenzar a escanear
+              Carga la base de paquetes ruteados (ID, Grupo)
             </p>
             <FileLoader onLoad={handleLoad} />
           </div>
@@ -245,7 +252,7 @@ export default function Scanner({ onShowHistory }) {
               <label className="scan-label">Agregar IDs a la base actual</label>
               <textarea
                 className="paste-textarea"
-                placeholder={'Pega los IDs que faltaron, uno por línea:\nABC123\nDEF456\n...'}
+                placeholder={'ID,Ruta o solo IDs:\nCE47120890002,AB\nCE47120890003\n...'}
                 value={addMoreText}
                 onChange={e => setAddMoreText(e.target.value)}
                 rows={5}
@@ -262,10 +269,7 @@ export default function Scanner({ onShowHistory }) {
                     ? `Agregar ${parseIds(addMoreText).size} IDs`
                     : 'Pega IDs arriba'}
                 </button>
-                <button
-                  className="btn-signout"
-                  onClick={() => { setShowAddMore(false); setAddMoreText('') }}
-                >
+                <button className="btn-signout" onClick={() => { setShowAddMore(false); setAddMoreText('') }}>
                   Cancelar
                 </button>
               </div>
@@ -288,7 +292,7 @@ export default function Scanner({ onShowHistory }) {
               />
             </form>
             <p className="scan-hint">
-              Bipa el paquete · el biper registra automáticamente · {routedPackages.size} ruteados cargados
+              Bipa el paquete · registra automáticamente · {routedPackages.size} ruteados cargados
             </p>
           </div>
 
