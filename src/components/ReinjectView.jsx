@@ -8,6 +8,28 @@ import {
 
 const KNOWN_GROUPS = ['AB', 'CD', 'FG', 'HI', 'JK', 'LM', 'NP', 'QR', 'ST', 'UV', 'WX', 'YZ']
 
+// Derives letter group from first character of route code (e.g. 'V2_AM2' → 'UV')
+const LETTER_TO_GROUP = {
+  A: 'AB', B: 'AB',
+  C: 'CD', D: 'CD',
+  F: 'FG', G: 'FG',
+  H: 'HI', I: 'HI',
+  J: 'JK', K: 'JK',
+  L: 'LM', M: 'LM',
+  N: 'NP', P: 'NP',
+  Q: 'QR', R: 'QR',
+  S: 'ST', T: 'ST',
+  U: 'UV', V: 'UV',
+  W: 'WX', X: 'WX',
+  Y: 'YZ', Z: 'YZ',
+}
+
+function getLetterGroup(rawRoute) {
+  if (!rawRoute) return 'ETIQUETA BLANCA'
+  const first = rawRoute.trim().charAt(0).toUpperCase()
+  return LETTER_TO_GROUP[first] || 'ETIQUETA BLANCA'
+}
+
 export default function ReinjectView({ onBack }) {
   const [routeMap, setRouteMap] = useState(null)
   const [syncLoading, setSyncLoading] = useState(true)
@@ -37,8 +59,15 @@ export default function ReinjectView({ onBack }) {
   }, [syncLoading])
 
   const processScan = (id) => {
-    const route = routeMap?.get(id) || 'SIN RUTA'
-    const record = { ts: new Date().toISOString(), id, route, session: sessionId }
+    const rawRoute = routeMap?.get(id)          // undefined | '' | 'V2_AM2'
+    const route = getLetterGroup(rawRoute)       // 'UV' | 'ETIQUETA BLANCA'
+    const record = {
+      ts: new Date().toISOString(),
+      id,
+      route,
+      rawRoute: rawRoute || '',
+      session: sessionId,
+    }
     saveReinjectToFirestore(record).catch(() => {})
     setReinjections(prev => [record, ...prev])
     playSuccess()
@@ -64,7 +93,11 @@ export default function ReinjectView({ onBack }) {
   }
 
   const handleDownload = () => {
-    const rows = reinjections.map(r => ({ ...r, status: r.route }))
+    const rows = reinjections.map(r => ({
+      ...r,
+      status: r.route,
+      session: r.session,
+    }))
     downloadCsv(rows, `reinyeccion-${todayDateStr()}.csv`)
   }
 
@@ -73,24 +106,24 @@ export default function ReinjectView({ onBack }) {
   const { groupCounts, allGroups, maxCount } = useMemo(() => {
     const counts = new Map()
     for (const r of reinjections) {
-      const g = r.route || 'SIN RUTA'
+      const g = r.route || 'ETIQUETA BLANCA'
       counts.set(g, (counts.get(g) || 0) + 1)
     }
     const knownWithData = KNOWN_GROUPS.filter(g => counts.has(g))
     const unknownGroups = [...counts.keys()]
-      .filter(g => !KNOWN_GROUPS.includes(g) && g !== 'SIN RUTA')
+      .filter(g => !KNOWN_GROUPS.includes(g) && g !== 'ETIQUETA BLANCA')
       .sort()
-    const noRoute = counts.has('SIN RUTA') ? ['SIN RUTA'] : []
+    const etBlanca = counts.has('ETIQUETA BLANCA') ? ['ETIQUETA BLANCA'] : []
     return {
       groupCounts: counts,
-      allGroups: [...knownWithData, ...unknownGroups, ...noRoute],
+      allGroups: [...knownWithData, ...unknownGroups, ...etBlanca],
       maxCount: Math.max(1, ...counts.values()),
     }
   }, [reinjections])
 
-  // Top group for highlight
-  const topGroup = allGroups.length > 0
-    ? allGroups.reduce((a, b) => (groupCounts.get(a) >= groupCounts.get(b) ? a : b), allGroups[0])
+  const routableGroups = allGroups.filter(g => g !== 'ETIQUETA BLANCA')
+  const topGroup = routableGroups.length > 0
+    ? routableGroups.reduce((a, b) => (groupCounts.get(a) >= groupCounts.get(b) ? a : b))
     : null
 
   return (
@@ -107,7 +140,7 @@ export default function ReinjectView({ onBack }) {
             <div className="app-sub">
               {reinjections.length === 0
                 ? 'Sin reinyecciones hoy'
-                : `${reinjections.length} reinyección${reinjections.length !== 1 ? 'es' : ''} hoy${topGroup && topGroup !== 'SIN RUTA' ? ` · Mayor reflujo: ${topGroup}` : ''}`
+                : `${reinjections.length} reinyección${reinjections.length !== 1 ? 'es' : ''} hoy${topGroup ? ` · Mayor reflujo: ${topGroup}` : ''}`
               }
             </div>
           </div>
@@ -130,8 +163,7 @@ export default function ReinjectView({ onBack }) {
         <div className="scanner-main">
           {!routeMap && (
             <div className="reinject-warning">
-              Sin base de ruteados cargada hoy — los paquetes se registrarán sin grupo de ruta.
-              Carga la base en Cherry Picking primero.
+              Sin base de ruteados hoy — carga la base en Cherry Picking primero para ver los grupos de ruta.
             </div>
           )}
 
@@ -166,15 +198,16 @@ export default function ReinjectView({ onBack }) {
                 {allGroups.map(g => {
                   const count = groupCounts.get(g)
                   const pct = (count / maxCount) * 100
-                  const isTop = g === topGroup && g !== 'SIN RUTA'
+                  const isTop = g === topGroup
+                  const isBlanca = g === 'ETIQUETA BLANCA'
                   return (
-                    <div key={g} className={`group-bar-row${isTop ? ' group-bar-row--top' : ''}`}>
-                      <span className="group-bar-label">{g}</span>
+                    <div
+                      key={g}
+                      className={`group-bar-row${isTop ? ' group-bar-row--top' : ''}${isBlanca ? ' group-bar-row--blanca' : ''}`}
+                    >
+                      <span className="group-bar-label">{g === 'ETIQUETA BLANCA' ? 'ET. BLANCA' : g}</span>
                       <div className="group-bar-track">
-                        <div
-                          className="group-bar-fill"
-                          style={{ width: `${pct}%` }}
-                        />
+                        <div className="group-bar-fill" style={{ width: `${pct}%` }} />
                       </div>
                       <span className="group-bar-count">{count}</span>
                     </div>
@@ -182,7 +215,6 @@ export default function ReinjectView({ onBack }) {
                 })}
               </div>
 
-              {/* Known groups with 0 — shown faded */}
               {KNOWN_GROUPS.filter(g => !groupCounts.has(g)).length > 0 && (
                 <div className="group-zero-row">
                   Sin datos: {KNOWN_GROUPS.filter(g => !groupCounts.has(g)).join(' · ')}
@@ -198,12 +230,18 @@ export default function ReinjectView({ onBack }) {
                 Reinyecciones de hoy — todos los dispositivos ({reinjections.length})
               </div>
               {reinjections.map((r, i) => (
-                <div key={i} className={`history-row${r.route === 'SIN RUTA' ? ' history-row--ruteado' : ''}`}>
+                <div
+                  key={i}
+                  className={`history-row${r.route === 'ETIQUETA BLANCA' ? ' history-row--blanca' : ''}`}
+                >
                   <span className="history-id">{r.id}</span>
                   <span className="history-meta">
                     {new Date(r.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     {' · '}
                     <span className="reinject-route">{r.route}</span>
+                    {r.rawRoute && r.route !== 'ETIQUETA BLANCA' && (
+                      <span className="reinject-raw"> ({r.rawRoute})</span>
+                    )}
                   </span>
                 </div>
               ))}
