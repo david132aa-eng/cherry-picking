@@ -28,9 +28,11 @@ const LETTER_TO_GROUP = {
 function getLetterGroup(rawRoute) {
   if (!rawRoute) return 'ETIQUETA BLANCA'
   let cleaned = rawRoute.trim()
-  if (cleaned.startsWith('>')) cleaned = cleaned.slice(1)
+  const hasPrefix = cleaned.startsWith('>')
+  if (hasPrefix) cleaned = cleaned.slice(1)
   const first = cleaned.charAt(0).toUpperCase()
-  return LETTER_TO_GROUP[first] || 'ETIQUETA BLANCA'
+  const group = LETTER_TO_GROUP[first] || 'ETIQUETA BLANCA'
+  return hasPrefix && group !== 'ETIQUETA BLANCA' ? `>${group}` : group
 }
 
 export default function ReinjectView({ onBack }) {
