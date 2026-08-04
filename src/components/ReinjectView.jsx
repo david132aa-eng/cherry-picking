@@ -35,15 +35,34 @@ function getLetterGroup(rawRoute) {
   return hasPrefix && group !== 'ETIQUETA BLANCA' ? `>${group}` : group
 }
 
+// Shared with Scanner — same localStorage key so one load serves both modules
+const ROUTES_KEY = () => 'cp_routes_' + todayDateStr()
+
+function loadLocalRoutes() {
+  try {
+    const raw = localStorage.getItem(ROUTES_KEY())
+    if (!raw) return null
+    const data = JSON.parse(raw)
+    return new Map(Object.entries(data.routeMap || {}))
+  } catch { return null }
+}
+
+function saveLocalRoutes(routeMap, name) {
+  localStorage.setItem(ROUTES_KEY(), JSON.stringify({
+    ids: [...routeMap.keys()],
+    name,
+    routeMap: Object.fromEntries(routeMap),
+  }))
+}
+
 export default function ReinjectView({ onBack }) {
-  const [routeMap, setRouteMap] = useState(null)
-  const [syncLoading, setSyncLoading] = useState(true)
+  const savedLocal = loadLocalRoutes()
+  const [routeMap, setRouteMap] = useState(savedLocal)
+  const [syncLoading, setSyncLoading] = useState(!savedLocal)
   const [inputVal, setInputVal] = useState('')
   const [reinjections, setReinjections] = useState([])
   const [sessionId] = useState('R-' + Date.now().toString(36).toUpperCase())
   const inputRef = useRef()
-  // Tracks whether the user loaded a base locally in this session
-  const locallyLoadedRef = useRef(false)
 
   // Shared routing base from Firestore — same doc that Cherry Picking writes
   useEffect(() => {
@@ -53,9 +72,13 @@ export default function ReinjectView({ onBack }) {
       setSyncLoading(false)
       if (data) {
         const incomingHasRoutes = [...data.routeMap.values()].some(v => v.length > 0)
-        // Don't overwrite a locally-loaded base with an empty Firestore doc
-        if (locallyLoadedRef.current && !incomingHasRoutes) return
-        setRouteMap(data.routeMap)
+        // Only override local data if Firestore actually has routes
+        if (incomingHasRoutes) {
+          setRouteMap(data.routeMap)
+          saveLocalRoutes(data.routeMap, data.name || '')
+        } else if (!savedLocal) {
+          setRouteMap(data.routeMap)
+        }
       }
     })
     return () => { unsub(); clearTimeout(timeout) }
@@ -71,8 +94,8 @@ export default function ReinjectView({ onBack }) {
   }, [syncLoading])
 
   const handleLoad = (newRouteMap, name) => {
-    locallyLoadedRef.current = true
     setRouteMap(newRouteMap)
+    saveLocalRoutes(newRouteMap, name)
     syncRoutesToFirestore(newRouteMap, name).catch(() => {})
   }
 
