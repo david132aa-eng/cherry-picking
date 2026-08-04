@@ -26,7 +26,9 @@ const LETTER_TO_GROUP = {
 
 function getLetterGroup(rawRoute) {
   if (!rawRoute) return 'ETIQUETA BLANCA'
-  const first = rawRoute.trim().charAt(0).toUpperCase()
+  let cleaned = rawRoute.trim()
+  if (cleaned.startsWith('>')) cleaned = cleaned.slice(1)
+  const first = cleaned.charAt(0).toUpperCase()
   return LETTER_TO_GROUP[first] || 'ETIQUETA BLANCA'
 }
 

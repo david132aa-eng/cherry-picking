@@ -57,10 +57,16 @@ export default function Scanner({ onShowHistory, onShowReinject }) {
       clearTimeout(timeout)
       setSyncLoading(false)
       if (data) {
-        setRoutedPackages(data.ids)
-        setRouteMap(data.routeMap)
-        setRoutedFileName(data.name)
-        saveTodayRoutes(data.ids, data.name, data.routeMap)
+        const incomingHasRoutes = [...data.routeMap.values()].some(v => v.length > 0)
+        if (!incomingHasRoutes && saved?.routeMap && [...saved.routeMap.values()].some(v => v.length > 0)) {
+          // Firestore has old format (no routeMap), but we have valid local data → re-sync
+          syncRoutesToFirestore(saved.routeMap, saved.fileName).catch(() => {})
+        } else {
+          setRoutedPackages(data.ids)
+          setRouteMap(data.routeMap)
+          setRoutedFileName(data.name)
+          saveTodayRoutes(data.ids, data.name, data.routeMap)
+        }
       }
     })
     return () => { unsubscribe(); clearTimeout(timeout) }
