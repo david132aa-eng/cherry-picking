@@ -516,6 +516,28 @@ body {
   border-left: 3px solid #f0b429;
 }
 
+.top-group-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--red-bg);
+  border: 1.5px solid var(--red-vivid);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+.top-group-pill {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--red-vivid);
+  min-width: 40px;
+  text-align: center;
+  letter-spacing: -0.5px;
+}
+.top-group-info { display: flex; flex-direction: column; gap: 2px; }
+.top-group-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-2); }
+.top-group-count { font-size: 13px; font-weight: 600; color: var(--red-vivid); }
+
 .dashboard-header {
   display: flex;
   justify-content: space-between;

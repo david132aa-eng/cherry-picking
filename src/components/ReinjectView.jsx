@@ -237,6 +237,15 @@ export default function ReinjectView({ onBack }) {
           {/* ── Dashboard ── */}
           {allGroups.length > 0 && (
             <div className="scan-card">
+              {topGroup && (
+                <div className="top-group-banner">
+                  <div className="top-group-pill">{topGroup}</div>
+                  <div className="top-group-info">
+                    <span className="top-group-label">Mayor reflujo</span>
+                    <span className="top-group-count">{groupCounts.get(topGroup)} paquetes · prioridad</span>
+                  </div>
+                </div>
+              )}
               <div className="dashboard-header">
                 <span className="dashboard-title">Reflujo por grupo de letras</span>
                 <span className="dashboard-total">{reinjections.length} total</span>
