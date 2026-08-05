@@ -44,6 +44,7 @@ export default function Scanner({ onShowHistory, onShowReinject }) {
   const [showAddMore, setShowAddMore] = useState(false)
   const [addMoreText, setAddMoreText] = useState('')
   const inputRef = useRef()
+  const routeMapRef = useRef(saved?.routeMap ?? null)
 
   // Subscribe to today's scans — real-time across all devices
   useEffect(() => {
@@ -57,15 +58,14 @@ export default function Scanner({ onShowHistory, onShowReinject }) {
       clearTimeout(timeout)
       setSyncLoading(false)
       if (data) {
-        const incomingHasRoutes = [...data.routeMap.values()].some(v => v.length > 0)
-        if (!incomingHasRoutes && saved?.routeMap && [...saved.routeMap.values()].some(v => v.length > 0)) {
-          // Firestore has old format (no routeMap), but we have valid local data → re-sync
-          syncRoutesToFirestore(saved.routeMap, saved.fileName).catch(() => {})
-        } else {
+        // Only accept Firestore data if it has at least as many IDs as what we already have
+        const currentSize = routeMapRef.current?.size ?? 0
+        if (data.routeMap.size >= currentSize) {
           setRoutedPackages(data.ids)
           setRouteMap(data.routeMap)
           setRoutedFileName(data.name)
           saveTodayRoutes(data.ids, data.name, data.routeMap)
+          routeMapRef.current = data.routeMap
         }
       }
     })
@@ -83,6 +83,7 @@ export default function Scanner({ onShowHistory, onShowReinject }) {
     setRouteMap(newRouteMap)
     setRoutedFileName(name)
     setScans([])
+    routeMapRef.current = newRouteMap
     syncRoutesToFirestore(newRouteMap, name).catch(() => {})
   }
 
@@ -93,6 +94,7 @@ export default function Scanner({ onShowHistory, onShowReinject }) {
     setRoutedFileName('')
     setScans([])
     setShowAddMore(false)
+    routeMapRef.current = null
   }
 
   const handleExportRoutes = () => {
@@ -119,6 +121,7 @@ export default function Scanner({ onShowHistory, onShowReinject }) {
     setRoutedFileName(newName)
     setAddMoreText('')
     setShowAddMore(false)
+    routeMapRef.current = mergedMap
     syncRoutesToFirestore(mergedMap, newName).catch(() => {})
     setTimeout(() => inputRef.current?.focus(), 50)
   }

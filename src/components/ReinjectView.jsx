@@ -63,6 +63,8 @@ export default function ReinjectView({ onBack }) {
   const [reinjections, setReinjections] = useState([])
   const [sessionId] = useState('R-' + Date.now().toString(36).toUpperCase())
   const inputRef = useRef()
+  // Tracks the most up-to-date routeMap (stable reference for the subscription closure)
+  const routeMapRef = useRef(savedLocal)
 
   // Shared routing base from Firestore — same doc that Cherry Picking writes
   useEffect(() => {
@@ -71,13 +73,13 @@ export default function ReinjectView({ onBack }) {
       clearTimeout(timeout)
       setSyncLoading(false)
       if (data) {
-        const incomingHasRoutes = [...data.routeMap.values()].some(v => v.length > 0)
-        // Only override local data if Firestore actually has routes
-        if (incomingHasRoutes) {
+        // Only accept Firestore data if it has at least as many IDs as what we already have.
+        // This prevents a stale/old Firestore snapshot from overwriting a fresher add-more.
+        const currentSize = routeMapRef.current?.size ?? 0
+        if (data.routeMap.size >= currentSize) {
           setRouteMap(data.routeMap)
           saveLocalRoutes(data.routeMap, data.name || '')
-        } else if (!savedLocal) {
-          setRouteMap(data.routeMap)
+          routeMapRef.current = data.routeMap
         }
       }
     })
@@ -95,6 +97,7 @@ export default function ReinjectView({ onBack }) {
 
   const handleLoad = (newRouteMap, name) => {
     setRouteMap(newRouteMap)
+    routeMapRef.current = newRouteMap
     saveLocalRoutes(newRouteMap, name)
     syncRoutesToFirestore(newRouteMap, name).catch(() => {})
   }
