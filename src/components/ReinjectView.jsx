@@ -184,6 +184,9 @@ export default function ReinjectView({ onBack }) {
   const topGroup = routableGroups.length > 0
     ? routableGroups.reduce((a, b) => (groupCounts.get(a) >= groupCounts.get(b) ? a : b))
     : null
+  const topGroups = [...routableGroups]
+    .sort((a, b) => (groupCounts.get(b) || 0) - (groupCounts.get(a) || 0))
+    .slice(0, 3)
 
   return (
     <div className="scanner-wrap">
@@ -263,12 +266,17 @@ export default function ReinjectView({ onBack }) {
           {/* ── Dashboard ── */}
           {allGroups.length > 0 && (
             <div className="scan-card">
-              {topGroup && (
+              {topGroups.length > 0 && (
                 <div className="top-group-banner">
-                  <div className="top-group-pill">{topGroup}</div>
-                  <div className="top-group-info">
-                    <span className="top-group-label">Mayor reflujo</span>
-                    <span className="top-group-count">{groupCounts.get(topGroup)} paquetes · prioridad</span>
+                  <span className="top-group-header">Prioridad</span>
+                  <div className="top-group-list">
+                    {topGroups.map((g, i) => (
+                      <div key={g} className={`top-group-item${i === 0 ? ' top-group-item--first' : ''}`}>
+                        <span className="top-group-rank">#{i + 1}</span>
+                        <span className="top-group-pill">{g}</span>
+                        <span className="top-group-count">{groupCounts.get(g)} paq.</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

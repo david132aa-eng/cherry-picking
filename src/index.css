@@ -517,26 +517,39 @@ body {
 }
 
 .top-group-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
   background: var(--red-bg);
   border: 1.5px solid var(--red-vivid);
   border-radius: 10px;
   padding: 10px 14px;
   margin-bottom: 16px;
 }
+.top-group-header {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.top-group-list { display: flex; flex-direction: column; gap: 4px; }
+.top-group-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  opacity: 0.75;
+}
+.top-group-item--first { opacity: 1; }
+.top-group-rank { font-size: 11px; color: var(--text-3); min-width: 18px; }
 .top-group-pill {
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--red-vivid);
-  min-width: 40px;
-  text-align: center;
-  letter-spacing: -0.5px;
+  min-width: 36px;
 }
-.top-group-info { display: flex; flex-direction: column; gap: 2px; }
-.top-group-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-2); }
-.top-group-count { font-size: 13px; font-weight: 600; color: var(--red-vivid); }
+.top-group-item--first .top-group-pill { font-size: 18px; }
+.top-group-count { font-size: 12px; font-weight: 500; color: var(--text-2); }
 
 .dashboard-header {
   display: flex;
